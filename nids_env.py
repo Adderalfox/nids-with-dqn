@@ -2,6 +2,7 @@ import gym
 from gym import spaces
 import numpy as np
 import torch
+from sklearn.metrics import precision_score, recall_score
 
 class NIDSEnv(gym.Env):
     def __init__(self, data, labels):
@@ -25,11 +26,24 @@ class NIDSEnv(gym.Env):
         true_label = self.labels[self.current_index]
         state = self.data[self.current_index]
 
+        true_positives = 0
+        true_negatives = 0
+        false_positives = 0
+        false_negatives = 0
+        precision = 0
+        recall = 0
+
         reward = 0
         if action == true_label:
-            reward = 1
+            if action == 1:
+                reward = +2  # Correctly detected attack
+            else:
+                reward = +1  # Correctly detected normal
         else:
-            reward = -1
+            if action == 1:
+                reward = -1  # False positive (benign misclassified as attack)
+            else:
+                reward = -2  # False negative (attack missed)
 
         self.current_index += 1
         if self.current_index >= len(self.data):

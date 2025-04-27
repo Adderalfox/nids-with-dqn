@@ -3,7 +3,7 @@ from nids_env import NIDSEnv
 from dqn_agent import DQNAgent
 from preprocess import preprocess_data
 
-episodes = 1000
+episodes = 1100
 target_update_freq = 10
 checkpoint_interval = 5
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -17,7 +17,26 @@ action_dim = 2
 
 agent = DQNAgent(state_dim, action_dim, device=device)
 
-for episode in range(episodes):
+#---------------------------Resume Training Block------------------------------#
+
+start_episode = 395
+checkpoint_path = f"checkpoints/checkpoint_{start_episode}.pth"
+
+checkpoint = torch.load(checkpoint_path, map_location=device)
+agent.policy_net.load_state_dict(checkpoint['policy_state_dict'])
+agent.target_net.load_state_dict(checkpoint['target_state_dict'])
+agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+agent.epsilon = checkpoint['epsilon']
+
+print(f"Loaded checkpoint from episode {start_episode}")
+
+print(f"Resuming training from episode {start_episode}...")
+
+#---------------------------Resume Training Block------------------------------#
+
+# for episode in range(episodes):
+for episode in range(start_episode, episodes):
+
     state = env.reset()
     total_reward = 0
     done = False
@@ -34,7 +53,7 @@ for episode in range(episodes):
         total_reward += reward
 
         count += 1
-        print(f'In step {count}: Action Taken:-{action}, Total Reward:-{total_reward}')
+        print(f'In step {count}: Action Taken: {action}, Total Reward: {total_reward}, epsilon: {agent.epsilon}')
 
     if agent.epsilon > agent.epsilon_min:
         agent.epsilon *= agent.epsilon_decay
@@ -49,7 +68,3 @@ for episode in range(episodes):
     print(f"Episode {episode + 1}/{episodes}, Total Reward: {total_reward: .2f}, Epsilon: {agent.epsilon: .4f}")
 
 torch.save(agent.policy_net.state_dict(), 'dqn_nids_model.pth')
-# try:
-#     last_checkpoint = 'checkpoint'
-#     agent.load(last_checkpoint)
-# except:

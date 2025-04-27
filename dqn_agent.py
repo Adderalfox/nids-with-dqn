@@ -6,8 +6,8 @@ import numpy as np
 from collections import deque
 
 class DQNAgent:
-    def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.99, epsilon=1.0, epsilon_decay=0.995,
-                 epsilon_min=0.01, batch_size=64, memory_size=10000, device=None):
+    def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.95, epsilon=1.0, epsilon_decay=0.995,
+                 epsilon_min=0.01, batch_size=128, memory_size=10000, device=None):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.lr = lr
