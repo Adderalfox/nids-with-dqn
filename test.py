@@ -16,7 +16,7 @@ agent = DQNAgent(state_dim, action_dim, device=device)
 
 # Load trained model
 # agent.policy_net.load_state_dict(torch.load('dqn_nids_model.pth', map_location=device))
-checkpoint = torch.load('checkpoints/checkpoint_390.pth', map_location=device)
+checkpoint = torch.load('checkpoints/checkpoint_395.pth', map_location=device)
 agent.policy_net.load_state_dict(checkpoint['policy_state_dict'])
 agent.policy_net.eval()
 

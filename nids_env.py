@@ -36,14 +36,14 @@ class NIDSEnv(gym.Env):
         reward = 0
         if action == true_label:
             if action == 1:
-                reward = +2  # Correctly detected attack
+                reward = +4  # Correctly detected attack
             else:
-                reward = +1  # Correctly detected normal
+                reward = +3  # Correctly detected normal
         else:
             if action == 1:
-                reward = -1  # False positive (benign misclassified as attack)
+                reward = -5  # False positive (benign misclassified as attack)
             else:
-                reward = -2  # False negative (attack missed)
+                reward = -8  # False negative (attack missed)
 
         self.current_index += 1
         if self.current_index >= len(self.data):

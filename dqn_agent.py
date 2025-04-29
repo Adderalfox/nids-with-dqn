@@ -6,8 +6,8 @@ import numpy as np
 from collections import deque
 
 class DQNAgent:
-    def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.95, epsilon=1.0, epsilon_decay=0.995,
-                 epsilon_min=0.01, batch_size=128, memory_size=10000, device=None):
+    def __init__(self, state_dim, action_dim, lr=0.0005, gamma=0.95, epsilon=1.0, epsilon_decay=0.995,
+                 epsilon_min=0.02, batch_size=128, memory_size=10000, device=None):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.lr = lr
@@ -58,14 +58,20 @@ class DQNAgent:
     def replay(self):
         if len(self.memory) < self.batch_size:
             return
-        batch = random.sample(self.memory, self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
+        benign_samples = [experience for experience in self.memory if experience[2] == 0]
+        attack_samples = [experience for experience in self.memory if experience[2] == 1]
 
-        # states = torch.FloatTensor(np.array(states)).to(self.device)
-        # actions = torch.LongTensor(actions).unsqueeze(1).to(self.device)
-        # rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
-        # next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
-        # dones = torch.BoolTensor(dones).unsqueeze(1).to(self.device)
+        half_batch = self.batch_size // 2
+
+        # Make sure enough samples exist to avoid ValueError
+        if len(benign_samples) >= half_batch and len(attack_samples) >= half_batch:
+            batch = random.sample(benign_samples, half_batch) + random.sample(attack_samples, half_batch)
+        else:
+            batch = random.sample(self.memory, self.batch_size)
+
+        random.shuffle(batch)
+
+        states, actions, rewards, next_states, dones = zip(*batch)
 
         for i, (s, ns) in enumerate(zip(states, next_states)):
             if not isinstance(s, np.ndarray):
@@ -84,7 +90,7 @@ class DQNAgent:
             next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
             dones = torch.BoolTensor(dones).unsqueeze(1).to(self.device)
         except Exception as e:
-            print("❌ Failed to convert to batch tensors!")
+            print("Failed to convert to batch tensors!")
             print(f"Error: {e}")
             print(f"Sampled batch shapes:")
             for s in states:
@@ -101,10 +107,15 @@ class DQNAgent:
 
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
+
         self.optimizer.step()
 
-        # if self.epsilon > self.epsilon_min:
-        #     self.epsilon *= self.epsilon_decay
+        # polyak averaging
+        tau = 0.01
+
+        for target_param, policy_param in zip(self.target_net.parameters(), self.policy_net.parameters()):
+            target_param.data.copy_(tau * policy_param.data + (1.0 - tau) * target_param.data)
 
     def save_checkpoint(self, name):
         torch.save({

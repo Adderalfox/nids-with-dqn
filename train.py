@@ -19,7 +19,7 @@ agent = DQNAgent(state_dim, action_dim, device=device)
 
 #---------------------------Resume Training Block------------------------------#
 
-start_episode = 395
+start_episode = 570
 checkpoint_path = f"checkpoints/checkpoint_{start_episode}.pth"
 
 checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -58,8 +58,8 @@ for episode in range(start_episode, episodes):
     if agent.epsilon > agent.epsilon_min:
         agent.epsilon *= agent.epsilon_decay
 
-    if episode % target_update_freq == 0:
-        agent.update_target_network()
+    # if episode % target_update_freq == 0:
+    #     agent.update_target_network()
 
     if episode % checkpoint_interval == 0:
         checkpoint_path = f"checkpoints/checkpoint_{episode}.pth"
