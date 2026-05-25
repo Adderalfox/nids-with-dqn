@@ -3,7 +3,7 @@ from nids_env import NIDSEnv
 from dqn_agent import DQNAgent
 from preprocess import preprocess_data
 
-episodes = 1100
+episodes = 3500
 target_update_freq = 10
 checkpoint_interval = 5
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -19,41 +19,46 @@ agent = DQNAgent(state_dim, action_dim, device=device)
 
 #---------------------------Resume Training Block------------------------------#
 
-start_episode = 570
-checkpoint_path = f"checkpoints/checkpoint_{start_episode}.pth"
+# start_episode = 2485
+# checkpoint_path = f"checkpoints/checkpoint_{start_episode}.pth"
 
-checkpoint = torch.load(checkpoint_path, map_location=device)
-agent.policy_net.load_state_dict(checkpoint['policy_state_dict'])
-agent.target_net.load_state_dict(checkpoint['target_state_dict'])
-agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-agent.epsilon = checkpoint['epsilon']
+# checkpoint = torch.load(checkpoint_path, map_location=device)
+# agent.policy_net.load_state_dict(checkpoint['policy_state_dict'])
+# agent.target_net.load_state_dict(checkpoint['target_state_dict'])
+# agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+# agent.epsilon = checkpoint['epsilon']
 
-print(f"Loaded checkpoint from episode {start_episode}")
+# print(f"Loaded checkpoint from episode {start_episode}")
 
-print(f"Resuming training from episode {start_episode}...")
+# print(f"Resuming training from episode {start_episode}...")
 
 #---------------------------Resume Training Block------------------------------#
 
-# for episode in range(episodes):
-for episode in range(start_episode, episodes):
+for episode in range(episodes):
+# for episode in range(start_episode, episodes):
 
     state = env.reset()
     total_reward = 0
     done = False
 
     count = 0
-    while not done:
+    max_steps_per_episode = 1000 # Limit steps to avoid infinite loops and speed up episodes
+    while not done and count < max_steps_per_episode:
         action = agent.act(state)
-        reward, next_state, done = env.step(action)
+        reward, next_state, done, label = env.step(action)
 
-        agent.remember(state, action, reward, next_state, done)
-        agent.replay()
+        agent.remember(state, action, reward, next_state, done, label)
+        
+        # Only replay every 10 steps to improve speed and stability
+        if count % 10 == 0:
+            agent.replay()
 
         state = next_state
         total_reward += reward
 
         count += 1
-        print(f'In step {count}: Action Taken: {action}, Total Reward: {total_reward}, epsilon: {agent.epsilon}')
+        if count % 100 == 0:
+            print(f'Episode {episode}, Step {count}: Reward: {total_reward:.2f}, Epsilon: {agent.epsilon:.4f}')
 
     if agent.epsilon > agent.epsilon_min:
         agent.epsilon *= agent.epsilon_decay

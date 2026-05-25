@@ -6,8 +6,8 @@ import numpy as np
 from collections import deque
 
 class DQNAgent:
-    def __init__(self, state_dim, action_dim, lr=0.0005, gamma=0.95, epsilon=1.0, epsilon_decay=0.995,
-                 epsilon_min=0.02, batch_size=128, memory_size=10000, device=None):
+    def __init__(self, state_dim, action_dim, lr=0.0001, gamma=0.95, epsilon=1.0, epsilon_decay=0.998,
+                 epsilon_min=0.02, batch_size=128, memory_size=50000, device=None):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.lr = lr
@@ -29,7 +29,10 @@ class DQNAgent:
 
     def _build_network(self):
         return nn.Sequential(
-            nn.Linear(self.state_dim, 128),
+            nn.Linear(self.state_dim, 256),
+            nn.ReLU(),
+            nn.Dropout(0.2),  # Added dropout to prevent overfitting
+            nn.Linear(256, 128),
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
@@ -47,23 +50,23 @@ class DQNAgent:
             q_values = self.policy_net(state)
         return torch.argmax(q_values).item()
 
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, state, action, reward, next_state, done, label):
         if state.ndim != 1 or next_state.ndim != 1:
             print("❌ Bad shape found!")
-            print(f"State shape: {state.shape}, Next state shape: {next_state.shape}")
             return  # Skip storing this faulty sample
 
-        self.memory.append((state, action, reward, next_state, done))
+        self.memory.append((state, action, reward, next_state, done, label))
 
     def replay(self):
         if len(self.memory) < self.batch_size:
             return
-        benign_samples = [experience for experience in self.memory if experience[2] == 0]
-        attack_samples = [experience for experience in self.memory if experience[2] == 1]
+        
+        # Now using the 6th element (label) for balancing
+        benign_samples = [ex for ex in self.memory if ex[5] == 0]
+        attack_samples = [ex for ex in self.memory if ex[5] == 1]
 
         half_batch = self.batch_size // 2
 
-        # Make sure enough samples exist to avoid ValueError
         if len(benign_samples) >= half_batch and len(attack_samples) >= half_batch:
             batch = random.sample(benign_samples, half_batch) + random.sample(attack_samples, half_batch)
         else:
@@ -71,17 +74,7 @@ class DQNAgent:
 
         random.shuffle(batch)
 
-        states, actions, rewards, next_states, dones = zip(*batch)
-
-        for i, (s, ns) in enumerate(zip(states, next_states)):
-            if not isinstance(s, np.ndarray):
-                print(f"State at index {i} is not a numpy array: {type(s)}")
-            if not isinstance(ns, np.ndarray):
-                print(f"Next state at index {i} is not a numpy array: {type(ns)}")
-            if s.shape != ns.shape:
-                print(f"Mismatch at index {i}: state {s.shape}, next_state {ns.shape}")
-            if len(s.shape) != 1:
-                print(f"Bad shape at index {i}: state shape {s.shape}")
+        states, actions, rewards, next_states, dones, labels = zip(*batch)
 
         try:
             states = torch.FloatTensor(np.array(states)).to(self.device)
@@ -90,17 +83,15 @@ class DQNAgent:
             next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
             dones = torch.BoolTensor(dones).unsqueeze(1).to(self.device)
         except Exception as e:
-            print("Failed to convert to batch tensors!")
-            print(f"Error: {e}")
-            print(f"Sampled batch shapes:")
-            for s in states:
-                print(np.array(s).shape)
-            raise e
+            print(f"Failed to convert to batch tensors: {e}")
+            return
 
         curr_q = self.policy_net(states).gather(1, actions)
-
-        # .max(1, keepdim=True) ---> getting max q value from actions column
-        next_q = self.target_net(next_states).max(1, keepdim=True)[0].detach()
+        
+        # Double DQN Logic
+        next_actions = self.policy_net(next_states).argmax(1, keepdim=True)
+        next_q = self.target_net(next_states).gather(1, next_actions).detach()
+        
         target_q = rewards + (1 - dones.float()) * self.gamma * next_q
 
         loss = self.loss_fn(curr_q, target_q)
@@ -108,12 +99,10 @@ class DQNAgent:
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
-
         self.optimizer.step()
 
-        # polyak averaging
-        tau = 0.01
-
+        # polyak averaging - reduced tau for more stability
+        tau = 0.005
         for target_param, policy_param in zip(self.target_net.parameters(), self.policy_net.parameters()):
             target_param.data.copy_(tau * policy_param.data + (1.0 - tau) * target_param.data)
 

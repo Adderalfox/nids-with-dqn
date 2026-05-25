@@ -18,7 +18,8 @@ class NIDSEnv(gym.Env):
         self.observation_space = spaces.Box(low=0, high=1, shape=(self.num_features,), dtype=np.float32)
 
     def reset(self):
-        self.current_index = 0
+        # Start at a random index to ensure diversity across episodes
+        self.current_index = np.random.randint(0, len(self.data) - 1)
         return self.data[self.current_index]
 
     def step(self, action):
@@ -26,24 +27,17 @@ class NIDSEnv(gym.Env):
         true_label = self.labels[self.current_index]
         state = self.data[self.current_index]
 
-        true_positives = 0
-        true_negatives = 0
-        false_positives = 0
-        false_negatives = 0
-        precision = 0
-        recall = 0
-
         reward = 0
         if action == true_label:
             if action == 1:
-                reward = +4  # Correctly detected attack
+                reward = 1.0  # Correctly detected attack
             else:
-                reward = +3  # Correctly detected normal
+                reward = 0.5  # Correctly detected normal (less reward than detecting attack)
         else:
             if action == 1:
-                reward = -5  # False positive (benign misclassified as attack)
+                reward = -1.0  # False positive
             else:
-                reward = -8  # False negative (attack missed)
+                reward = -2.0  # False negative (dangerous, higher penalty)
 
         self.current_index += 1
         if self.current_index >= len(self.data):
@@ -52,7 +46,8 @@ class NIDSEnv(gym.Env):
         else:
             next_state = self.data[self.current_index]
 
-        return reward, next_state, done
+        # Return true_label as part of info or a dedicated field to help with balanced sampling in replay
+        return reward, next_state, done, true_label
 
     def render(self, mode='human'):
         pass
